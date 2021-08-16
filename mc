@@ -1,10 +1,10 @@
 #!/bin/bash
-minecraftDir="/home/mcserver/serverfiles"
-backupDir="/home/mcserver/backups/serverfiles"
+minecraftDir=""
+backupDir=""
 logDir="/home/mcserver/log/"
 dateStamp=$(date +%Y-%m-%d)
 minecraftJar='fabric-server-launch.jar'
-mcWorld='Fabric'
+mcWorld=''
 screenZip='screenZip'
 screenSession='minecraft_server'
 JVM_Options="nogui"
