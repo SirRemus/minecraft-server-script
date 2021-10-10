@@ -18,11 +18,11 @@ JVM_Arguments="java -Xmx50G -Xms50G -XX:+UnlockExperimentalVMOptions -XX:Paralle
 -XX:+PerfDisableSharedMem  -XX:InitiatingHeapOccupancyPercent=10 -XX:+DoEscapeAnalysis -XX:+EliminateLocks"
 helpMenu="
 		The commands are...
-	mc -start	-->	Starts your minecraft server.
-	mc -stop	-->	Stops your minecraft server.
-	mc -restart	-->	Restarts your minecraft server.
-	mc -backup	-->	Backs up your server folder and creates a zip file in your backup folder.
-	mc -help	-->	Gets you to this menu.
+	mc --start	-->	Starts your minecraft server.
+	mc --stop	-->	Stops your minecraft server.
+	mc --restart	-->	Restarts your minecraft server.
+	mc --backup	-->	Backs up your server folder and creates a zip file in your backup folder.
+	mc --help	-->	Gets you to this menu.
 	"
 mc_start() {
 	if  pgrep -f $minecraftJar > /dev/null ; then
