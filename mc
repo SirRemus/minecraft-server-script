@@ -131,5 +131,3 @@ case "$1" in
 	exit;;
 esac
 
-[Install]
-WantedBy=multi-user.target
