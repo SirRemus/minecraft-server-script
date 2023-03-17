@@ -1,0 +1,189 @@
+#!/bin/bash
+
+# Load configuration file
+source /usr/local/bin/mcserver_config.sh
+
+# Functions
+
+# Print the given string in bold
+print_status() {
+    echo -e "\033[1m$1\033[0m"
+}
+
+# Check if the given command is available, exit if not
+check_command() {
+    if ! command -v "$1" >/dev/null 2>&1; then
+        print_status "Error: $1 not found. Please install it and try again."
+        exit 1
+    fi
+}
+
+# Check if the given directory exists, exit if not
+check_directory() {
+    if [ ! -d "$1" ]; then
+        print_status "Directory $1 not found. Creating it now."
+        mkdir -p "$1"
+    fi
+}
+
+# Check if the required Java version is installed, exit if not
+check_java_version() {
+    required_major_version=8
+    if ! command -v java >/dev/null 2>&1; then
+        print_status "Error: Java not found. Please install Java and try again."
+        exit 1
+    fi
+
+    java_version=$(java -version 2>&1 | awk -F '"' '/version/ {print $2}')
+    major_version=$(echo "$java_version" | cut -d'.' -f1)
+
+    if [ "$major_version" -lt "$required_major_version" ]; then
+        print_status "Error: Java version $java_version is not supported. Please install Java $required_major_version or higher."
+        exit 1
+    fi
+}
+
+# Check if the Minecraft server is running
+is_server_running() {
+    pgrep -f "$minecraft_jar" > /dev/null
+}
+
+# Start the Minecraft server
+start_server() {
+    if is_server_running; then
+        print_status "$minecraft_jar is already running!"
+    else
+        print_status "Starting $minecraft_jar..."
+        cd "$minecraft_dir" || exit
+        screen -dmS "$screen_session" -L -Logfile "$log_dir/$mc_world-$date_stamp.log" $jvm_arguments -jar "$minecraft_jar" $jvm_options
+        sleep 7
+        if is_server_running; then
+            print_status "$minecraft_jar is now running. Type screen -r $screen_session to monitor."
+        else
+            print_status "Error! Could not start $minecraft_jar!"
+        fi
+    fi
+}
+
+# Stop the Minecraft server
+stop_server() {
+    if is_server_running; then
+        print_status "Stopping $minecraft_jar"
+        sleep 10
+        screen -S "$screen_session" -X eval "stuff \"save-all\"\015"
+        screen -S "$screen_session" -X eval "stuff \"stop\"\015"
+        print_status "$minecraft_jar is stopped."
+    else
+        print_status "$minecraft_jar is not running."
+    fi
+}
+
+# Restart the Minecraft server
+restart_server() {
+    print_status "Restarting the server..."
+    stop_server
+    sleep 15
+    start_server
+}
+
+# Validate the configuration by checking commands, Java version, and directories
+validate_config() {
+    check_command "java"
+    check_command "screen"
+    check_command "rsync"
+    check_command "zip"
+    check_directory "$minecraft_dir"
+    check_directory "$world_dir"
+    check_directory "$backup_dir"
+    check_directory "$log_dir"
+    check_java_version
+}
+
+# Create a backup of the Minecraft server
+create_backup() {
+    print_status "Creating backup..."
+    backup_name="$mc_world-$(date +%Y-%m-%d)"
+    backup_path="$backup_dir/$backup_name"
+    backup_zip_path="$backup_path.zip"
+
+    # Copy world directory to backup directory
+    mkdir -p "$backup_path"
+    rsync -avr --delete "$world_dir/" "$backup_path/"
+
+    # Create zip file
+    print_status "Compressing backup..."
+    cd "$backup_dir" || exit
+    
+    screen_name="backup_zip"
+    screen_log_file="screen_backup_zip.log"
+    rm -f "$screen_log_file"
+    
+    screen -dmS "$screen_name" -L -Logfile "$screen_log_file" bash -c "zip -r -9 \"$backup_zip_path\" \"$backup_name\"; echo 'Compression Finished' >> \"$screen_log_file\""
+    cd - > /dev/null
+
+    print_status "Compression started in screen (type screen -r $screen_name for status)."
+    print_status "Backup completed: $backup_zip_path"
+}
+
+# Suspend saves on the Minecraft server
+save_off() {
+    if is_server_running; then
+        print_status "$minecraft_jar is running... suspending saves"
+        screen -S "$screen_session" -X eval "stuff \"save-off\"\015"
+        screen -S "$screen_session" -X eval "stuff \"save-all\"\015"
+        sync
+        sleep 10
+    else
+        print_status "$minecraft_jar is not running. Not suspending saves."
+    fi
+}
+
+# Re-enable saves on the Minecraft server
+save_on() {
+    if is_server_running; then
+        print_status "$minecraft_jar is running... re-enabling saves"
+        screen -S "$screen_session" -X eval "stuff \"save-on\"\015"
+        screen -S "$screen_session" -X eval "stuff \"save-all\"\015"
+    else
+        print_status "$minecraft_jar is not running. Not resuming saves."
+    fi
+}
+
+# Delete old backups
+delete_old_backups() {
+    print_status "Deleting old backups..."
+    backups_to_delete=$(find "$backup_dir" -maxdepth 1 -type d -name "$mc_world-*" | sort | head -n -"$number_of_backups")
+    for backup in $backups_to_delete; do
+        print_status "Deleting $backup"
+        rm -rf "$backup"
+        backup_zip="${backup}.zip"
+        if [ -f "$backup_zip" ]; then
+            print_status "Deleting $backup_zip"
+            rm -f "$backup_zip"
+        fi
+    done
+}
+
+# Main
+validate_config
+
+case "$1" in
+    -start)
+        start_server
+    ;;
+    -stop)
+        stop_server
+    ;;
+    -restart)
+        restart_server
+    ;;
+    -backup)
+        save_off
+        create_backup
+        save_on
+        delete_old_backups
+    ;;
+    -help | *)
+        echo "$help_menu"
+    ;;
+esac
